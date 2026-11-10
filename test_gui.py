@@ -1,11 +1,14 @@
 import sys
+import psutil
 from PySide6.QtCore import Qt, QTimer, QPointF
-from PySide6.QtGui import QPainter, QPen
-from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QProgressBar
+from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF
+from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QProgressBar, QStackedWidget
 from core.system_monitor import (
     get_cpu_usage,
     get_memory_usage,
-    get_disk_usage
+    get_disk_usage,
+    get_system_info,
+    format_uptime
 )
 class CpuGraph(QWidget):
     def __init__(self):
@@ -46,6 +49,16 @@ class CpuGraph(QWidget):
 
             points.append(QPointF(x, y))
 
+        polygon_points = points + [
+            QPointF(self.width() - 10, self.height() - 20),
+            QPointF(10, self.height() - 20)
+        ]
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(137, 220, 235, 50))
+        painter.drawPolygon(QPolygonF(polygon_points))
+
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(Qt.GlobalColor.cyan, 3))
 
         for i in range(len(points) - 1):
@@ -87,28 +100,201 @@ sidebar_title.setStyleSheet(
 dashboard_btn = QPushButton("Dashboard")
 sidebar_layout.addWidget(dashboard_btn)
 
-dashboard_btn.setStyleSheet(
-    "color: white; background-color: #313244; "
-    "padding: 10px; border: none; text-align: left;"
-)
+dashboard_btn.setStyleSheet("""
+    QPushButton {
+        color: white;
+        background-color: #313244;
+        padding: 10px;
+        border: none;
+        text-align: left;
+    }
+
+    QPushButton:hover {
+        color: #89b4fa;
+        background-color: #45475a;
+        text-decoration: underline;
+    }
+""")
 
 # Кнопка Monitoring
 monitoring_btn = QPushButton("Monitoring")
 sidebar_layout.addWidget(monitoring_btn)
 
-monitoring_btn.setStyleSheet(
-    "color: white; background-color: #313244; "
-    "padding: 10px; border: none; text-align: left;"
+monitoring_btn.setStyleSheet("""
+    QPushButton {
+        color: white;
+        background-color: #313244;
+        padding: 10px;
+        border: none;
+        text-align: left;
+    }
+
+    QPushButton:hover {
+        color: #89b4fa;
+        background-color: #45475a;
+        text-decoration: underline;
+    }
+""")
+
+# Кнопка System Info
+system_info_btn = QPushButton("System Info")
+sidebar_layout.addWidget(system_info_btn)
+
+system_info_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+system_info_btn.setStyleSheet("""
+    QPushButton {
+        color: white;
+        background-color: #313244;
+        padding: 10px;
+        border: none;
+        text-align: left;
+    }
+
+    QPushButton:hover {
+        color: #89b4fa;
+        background-color: #45475a;
+        text-decoration: underline;
+    }
+""")
+
+def set_active_button(active_button):
+    buttons = [dashboard_btn, monitoring_btn, system_info_btn]
+
+    for button in buttons:
+        if button == active_button:
+            button.setStyleSheet("""
+                QPushButton {
+                    color: #89b4fa;
+                    background-color: #45475a;
+                    padding: 10px;
+                    border: none;
+                    border-left: 3px solid #89b4fa;
+                    text-align: left;
+                    font-weight: bold;
+                }
+            """)
+        else:
+            button.setStyleSheet("""
+                QPushButton {
+                    color: white;
+                    background-color: #313244;
+                    padding: 10px;
+                    border: none;
+                    text-align: left;
+                }
+                QPushButton:hover {
+                    color: #89b4fa;
+                    background-color: #45475a;
+                    text-decoration: underline;
+                }
+            """)
+
+dashboard_btn.clicked.connect(
+    lambda: (
+        pages.setCurrentWidget(dashboard_page),
+        set_active_button(dashboard_btn)
+    )
 )
+
+system_info_btn.clicked.connect(
+    lambda: (
+        pages.setCurrentWidget(system_info_page),
+        set_active_button(system_info_btn)
+    )
+)
+
+monitoring_btn.clicked.connect(
+    lambda: (
+        pages.setCurrentWidget(monitoring_page),
+        set_active_button(monitoring_btn)
+    )
+)
+
+
+set_active_button(dashboard_btn)
 
 # Добавляем панель в основную горизонтальную область
 main_layout.addWidget(sidebar)
-content = QWidget()
-content_layout = QVBoxLayout(content)
+pages = QStackedWidget()
+
+dashboard_page = QWidget()
+content_layout = QVBoxLayout(dashboard_page)
+
 cards_layout = QHBoxLayout()
 content_layout.addLayout(cards_layout)
+monitoring_page = QWidget()
+monitoring_layout = QVBoxLayout(monitoring_page)
 
-main_layout.addWidget(content)
+system_info_page = QWidget()
+system_info_layout = QVBoxLayout(system_info_page)
+
+pages.addWidget(dashboard_page)
+pages.addWidget(monitoring_page)
+pages.addWidget(system_info_page)
+system_title = QLabel("System Information")
+system_info_layout.addWidget(system_title)
+
+system_title.setStyleSheet(
+    "color: white; font-size: 24px; font-weight: bold;"
+)
+monitoring_title = QLabel("Advanced Monitoring")
+monitoring_layout.addWidget(monitoring_title)
+
+monitoring_title.setStyleSheet(
+    "color: white; font-size: 24px; font-weight: bold;"
+)
+cpu_details = QLabel()
+monitoring_layout.addWidget(cpu_details)
+
+cpu_details.setStyleSheet(
+    "color: #a6e3a1; font-size: 18px; "
+    "background-color: #313244; padding: 15px; "
+    "border-radius: 8px;"
+)
+ram_details = QLabel()
+monitoring_layout.addWidget(ram_details)
+
+ram_details.setStyleSheet(
+    "color: #89b4fa; font-size: 18px; "
+    "background-color: #313244; padding: 15px; "
+    "border-radius: 8px;"
+)
+
+disk_details = QLabel()
+monitoring_layout.addWidget(disk_details)
+
+disk_details.setStyleSheet(
+    "color: #f9e2af; font-size: 18px; "
+    "background-color: #313244; padding: 15px; "
+    "border-radius: 8px;"
+)
+
+info = get_system_info()
+
+system_labels = [
+    ("Operating System", info["os"]),
+    ("OS Version", info["os_version"]),
+    ("Kernel", info["kernel"]),
+    ("Architecture", info["architecture"]),
+    ("Hostname", info["hostname"]),
+    ("Processor", info["cpu"]),
+    ("CPU Cores", str(info["cpu_cores"])),
+    ("Total RAM", f'{info["ram_total"]} GB'),
+    ("Uptime", format_uptime(info["uptime"]))
+]
+
+for title, value in system_labels:
+    label = QLabel(f"{title}:  {value}")
+    label.setStyleSheet(
+        "color: white; font-size: 14px; "
+        "background-color: #313244; padding: 12px; "
+        "border-radius: 8px;"
+    )
+    system_info_layout.addWidget(label)
+
+main_layout.addWidget(pages)
+
 content_title = QLabel("System Overview")
 content_layout.addWidget(content_title)
 # Карточка процессора
@@ -256,11 +442,33 @@ disk_value.setStyleSheet(
 cards_layout.addWidget(disk_card)
 cpu_graph = CpuGraph()
 content_layout.addWidget(cpu_graph)
+
 def update_stats():
     cpu = get_cpu_usage()
+
+    cpu_details.setText(
+        f"CPU Load: {cpu:.1f}%\n"
+        f"Logical Cores: {get_system_info()['cpu_cores']}"
+    )
+
     cpu_graph.add_value(cpu)
+
     ram = get_memory_usage()
+    memory = psutil.virtual_memory()
+
+    ram_details.setText(
+        f"RAM Usage: {ram:.1f}%\n"
+        f"Used: {memory.used / (1024 ** 3):.2f} GB\n"
+        f"Available: {memory.available / (1024 ** 3):.2f} GB"
+    )
+
     disk = get_disk_usage()
+
+    disk_details.setText(
+        f"Disk Usage: {disk[0]:.1f}%\n"
+        f"Used: {disk[1]:.2f} GB\n"
+        f"Free: {disk[2]:.2f} GB"
+    )
 
     cpu_value.setText(f"{cpu:.1f}%")
     cpu_bar.setValue(int(cpu))
@@ -270,15 +478,13 @@ def update_stats():
 
     disk_value.setText(f"{disk[0]:.1f}%")
     disk_bar.setValue(int(disk[0]))
+
 cards_layout.addWidget(ram_card)
 cards_layout.addWidget(cpu_card)
 content_title.setStyleSheet(
     "color: white; font-size: 22px; font-weight: bold;"
 )
 main_layout.setAlignment(sidebar, Qt.AlignmentFlag.AlignLeft)
-layout.setAlignment(subtitle, Qt.AlignmentFlag.AlignCenter)
-layout.setAlignment(title, Qt.AlignmentFlag.AlignCenter)
-title.setStyleSheet("color: white; font-size: 24px; font-weight: bold;")
 
 timer = QTimer()
 timer.timeout.connect(update_stats)
