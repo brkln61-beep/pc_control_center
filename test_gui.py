@@ -468,11 +468,8 @@ content_layout.addWidget(cpu_graph)
 
 def update_stats():
     cpu = get_cpu_usage()
+    cpu_frequency = psutil.cpu_freq()
 
-    cpu_details.setText(
-        f"CPU Load: {cpu:.1f}%\n"
-        f"Logical Cores: {get_system_info()['cpu_cores']}"
-    )
 
     cpu_graph.add_value(cpu)
 
@@ -481,6 +478,7 @@ def update_stats():
 
     ram_details.setText(
         f"RAM Usage: {ram:.1f}%\n"
+        f"Total: {memory.total / (1024 ** 3):.2f} GB\n"
         f"Used: {memory.used / (1024 ** 3):.2f} GB\n"
         f"Available: {memory.available / (1024 ** 3):.2f} GB"
     )
@@ -489,6 +487,7 @@ def update_stats():
 
     disk_details.setText(
         f"Disk Usage: {disk[0]:.1f}%\n"
+        f"Total: {disk[1] + disk[2]:.2f} GB\n"
         f"Used: {disk[1]:.2f} GB\n"
         f"Free: {disk[2]:.2f} GB"
     )
@@ -511,6 +510,13 @@ def update_stats():
         elif device["device"] == "radeon":
             if device["sensors"]:
                 gpu_temperature = device["sensors"][0]["temperature"]
+
+    cpu_details.setText(
+    f"CPU Load: {cpu:.1f}%\n"
+    f"Logical Cores: {get_system_info()['cpu_cores']}\n"
+    f"Current Frequency: {cpu_frequency.current / 1000:.2f} GHz\n"
+    f"Maximum Frequency: {cpu_frequency.max / 1000:.2f} GHz"
+)
 
     if cpu_temperature is not None:
         cpu_temp_value.setText(f"{cpu_temperature:.1f} °C")
