@@ -1,8 +1,19 @@
 import sys
 import psutil
+
 from PySide6.QtCore import Qt, QTimer, QPointF
 from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF
-from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QProgressBar, QStackedWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QWidget,
+    QLabel,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QProgressBar,
+    QStackedWidget
+)
+
 from core.system_monitor import (
     get_cpu_usage,
     get_memory_usage,
@@ -10,6 +21,9 @@ from core.system_monitor import (
     get_system_info,
     format_uptime
 )
+
+from core.temperature_monitor import get_all_temperatures
+
 class CpuGraph(QWidget):
     def __init__(self):
         super().__init__()
@@ -55,7 +69,7 @@ class CpuGraph(QWidget):
         ]
 
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(137, 220, 235, 50))
+        painter.setBrush(QColor(137, 220, 235, 75))
         painter.drawPolygon(QPolygonF(polygon_points))
 
         painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -270,6 +284,15 @@ disk_details.setStyleSheet(
     "border-radius: 8px;"
 )
 
+temperature_details = QLabel()
+monitoring_layout.addWidget(temperature_details)
+
+temperature_details.setStyleSheet(
+    "color: #fab387; font-size: 18px; "
+    "background-color: #313244; padding: 15px; "
+    "border-radius: 8px;"
+)
+
 info = get_system_info()
 
 system_labels = [
@@ -470,6 +493,91 @@ def update_stats():
         f"Free: {disk[2]:.2f} GB"
     )
 
+    temperatures = get_all_temperatures()
+    colors = {
+    "normal": "#a6e3a1",
+    "warning": "#fab387",
+    "critical": "#f38ba8"
+}
+    cpu_temperature = None
+    gpu_temperature = None
+
+    for device in temperatures:
+        if device["device"] == "coretemp":
+            for sensor in device["sensors"]:
+                if sensor["label"] == "Package id 0":
+                    cpu_temperature = sensor["temperature"]
+
+        elif device["device"] == "radeon":
+            if device["sensors"]:
+                gpu_temperature = device["sensors"][0]["temperature"]
+
+    if cpu_temperature is not None:
+        cpu_temp_value.setText(f"{cpu_temperature:.1f} °C")
+
+        cpu_status = next(
+            (sensor["status"] for device in temperatures
+             if device["device"] == "coretemp"
+             for sensor in device["sensors"]
+             if sensor["label"] == "Package id 0"),
+            "normal"
+        )
+
+        cpu_temp_status.setText(cpu_status.upper())
+        cpu_temp_status.setStyleSheet(
+            f"color: {colors.get(cpu_status, '#ffffff')}; "
+            "font-size: 14px;"
+        )
+    else:
+        cpu_temp_value.setText("N/A")
+        cpu_temp_status.setText("N/A")
+
+    if gpu_temperature is not None:
+        gpu_temp_value.setText(f"{gpu_temperature:.1f} °C")
+
+        gpu_status = next(
+            (sensor["status"] for device in temperatures
+             if device["device"] == "radeon"
+             for sensor in device["sensors"]),
+            "normal"
+        )
+
+        gpu_temp_status.setText(gpu_status.upper())
+        gpu_temp_status.setStyleSheet(
+            f"color: {colors.get(gpu_status, '#ffffff')}; "
+            "font-size: 14px;"
+        )
+    else:
+        gpu_temp_value.setText("N/A")
+        gpu_temp_status.setText("N/A")
+    temperature_lines = ["<b>TEMPERATURES</b>"]
+
+    colors = {
+        "normal": "#a6e3a1",
+        "warning": "#fab387",
+        "critical": "#f38ba8"
+    }
+
+    for device in temperatures:
+        temperature_lines.append(
+            f"<br><b>{device['device']}</b>"
+        )
+
+        for sensor in device["sensors"]:
+            status = sensor["status"]
+            color = colors.get(status, "#ffffff")
+
+            temperature_lines.append(
+                f'<span style="color: {color};">'
+                f'{sensor["label"]}: '
+                f'{sensor["temperature"]:.1f} °C'
+                f'</span>'
+            )
+
+    temperature_details.setText(
+        "<br>".join(temperature_lines)
+    )
+
     cpu_value.setText(f"{cpu:.1f}%")
     cpu_bar.setValue(int(cpu))
 
@@ -478,6 +586,68 @@ def update_stats():
 
     disk_value.setText(f"{disk[0]:.1f}%")
     disk_bar.setValue(int(disk[0]))
+
+# Карточки температуры CPU и GPU
+temperature_cards_layout = QHBoxLayout()
+content_layout.addLayout(temperature_cards_layout)
+
+cpu_temp_card = QWidget()
+cpu_temp_card.setStyleSheet(
+    "background-color: #313244; border-radius: 12px;"
+)
+
+cpu_temp_layout = QVBoxLayout(cpu_temp_card)
+
+cpu_temp_title = QLabel("CPU Temperature")
+cpu_temp_layout.addWidget(cpu_temp_title)
+
+cpu_temp_title.setStyleSheet(
+    "color: #a6e3a1; font-size: 16px; font-weight: bold;"
+)
+
+cpu_temp_value = QLabel("-- °C")
+cpu_temp_layout.addWidget(cpu_temp_value)
+
+cpu_temp_value.setStyleSheet(
+    "color: white; font-size: 28px; font-weight: bold;"
+)
+cpu_temp_status = QLabel("N/A")
+cpu_temp_layout.addWidget(cpu_temp_status)
+
+cpu_temp_status.setStyleSheet(
+    "color: #a6e3a1; font-size: 14px;"
+)
+
+gpu_temp_card = QWidget()
+gpu_temp_card.setStyleSheet(
+    "background-color: #313244; border-radius: 12px;"
+)
+
+gpu_temp_layout = QVBoxLayout(gpu_temp_card)
+
+gpu_temp_title = QLabel("GPU Temperature")
+gpu_temp_layout.addWidget(gpu_temp_title)
+
+gpu_temp_title.setStyleSheet(
+    "color: #89b4fa; font-size: 16px; font-weight: bold;"
+)
+
+gpu_temp_value = QLabel("-- °C")
+gpu_temp_layout.addWidget(gpu_temp_value)
+
+gpu_temp_value.setStyleSheet(
+    "color: white; font-size: 28px; font-weight: bold;"
+)
+
+gpu_temp_status = QLabel("N/A")
+gpu_temp_layout.addWidget(gpu_temp_status)
+
+gpu_temp_status.setStyleSheet(
+    "color: #a6e3a1; font-size: 14px;"
+)
+
+temperature_cards_layout.addWidget(cpu_temp_card)
+temperature_cards_layout.addWidget(gpu_temp_card)
 
 cards_layout.addWidget(ram_card)
 cards_layout.addWidget(cpu_card)
